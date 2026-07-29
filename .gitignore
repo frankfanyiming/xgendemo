@@ -1,0 +1,4 @@
+.env
+*.local.json
+*.local.json5
+node_modules/

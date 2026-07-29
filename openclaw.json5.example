@@ -1,0 +1,58 @@
+// OpenClaw 配置模板 —— Kimi K3 (Moonshot) + Discord
+// 本结构已在 OpenClaw 2026.7.1-2 上实测通过（见 README「验证记录」）。
+// 复制到 ~/.openclaw/openclaw.json 并替换占位符，或直接运行 ./install.sh 自动生成（生成为标准 JSON）。
+//
+// 文档: https://docs.openclaw.ai/providers/moonshot
+//       https://docs.openclaw.ai/channels/discord
+{
+  // 写在这里的变量会注入 Gateway 进程，供下方 ${...} 和 token 引用使用
+  env: {
+    MOONSHOT_API_KEY: "sk-替换成你的Kimi密钥",
+    DISCORD_BOT_TOKEN: "替换成你的Discord机器人Token",
+  },
+
+  // 不经 onboard 向导、手写配置时必须有这段，否则 Gateway 拒绝启动
+  // （报错 "existing config is missing gateway.mode"）
+  gateway: { mode: "local" },
+
+  // 默认模型：Kimi K3（必须带 moonshot/ 前缀，裸写 kimi-k3 无效）
+  agents: {
+    defaults: {
+      model: { primary: "moonshot/kimi-k3" },
+    },
+  },
+
+  models: {
+    mode: "merge", // 与内置模型目录合并（目录已含 kimi-k3 / kimi-k2.7-code 等）
+    providers: {
+      moonshot: {
+        // 国际版。中国大陆账号请改为 https://api.moonshot.cn/v1
+        baseUrl: "https://api.moonshot.ai/v1",
+        apiKey: "${MOONSHOT_API_KEY}",
+        api: "openai-completions", // Moonshot 走 OpenAI 兼容接口
+      },
+    },
+  },
+
+  // discord / moonshot 是外部插件（@openclaw/discord、@openclaw/moonshot-provider），
+  // 首次启动会自动安装，但需要在这里显式信任并启用，否则只会告警不生效
+  plugins: {
+    allow: ["discord", "moonshot"],
+    entries: {
+      discord: { enabled: true },
+      moonshot: { enabled: true },
+    },
+  },
+
+  channels: {
+    discord: {
+      enabled: true,
+      // 从上方 env 块读取 Token，避免明文散落
+      token: {
+        source: "env",
+        provider: "default",
+        id: "DISCORD_BOT_TOKEN",
+      },
+    },
+  },
+}
