@@ -46,12 +46,17 @@ const MOCK_READING = [
 ];
 
 // ── 调模型 ────────────────────────────────────────────
-async function chat(messages, { json = false, temperature = 0.8 } = {}) {
+// 有些模型（如 kimi-k2.6）只接受 temperature=1，自定义会 400。
+// 所以默认不发这个参数，用模型自己的默认值；确实要调就设环境变量 TEMPERATURE。
+const TEMP = process.env.TEMPERATURE ? Number(process.env.TEMPERATURE) : null;
+const temp = () => (TEMP === null ? {} : { temperature: TEMP });
+
+async function chat(messages, { json = false } = {}) {
   const res = await fetch(`${BASE_URL}/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${API_KEY}` },
     body: JSON.stringify({
-      model: MODEL, messages, temperature,
+      model: MODEL, messages, ...temp(),
       ...(json ? { response_format: { type: "json_object" } } : {}),
     }),
   });
@@ -65,7 +70,7 @@ async function chatStream(messages, onDelta) {
   const res = await fetch(`${BASE_URL}/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${API_KEY}` },
-    body: JSON.stringify({ model: MODEL, messages, temperature: 0.85, stream: true }),
+    body: JSON.stringify({ model: MODEL, messages, ...temp(), stream: true }),
   });
   if (!res.ok) throw new Error(`模型请求失败 ${res.status}: ${(await res.text()).slice(0, 300)}`);
 
@@ -111,13 +116,12 @@ app.post("/api/summon", async (req, res) => {
 
     const raw = await chat(
       [{ role: "user", content: personaPrompt(chart) }],
-      { json: true, temperature: 0.9 }
+      { json: true }
     );
     const persona = JSON.parse(raw);
 
     const reading = await chat(
-      [{ role: "user", content: firstReadingPrompt(chart, persona) }],
-      { temperature: 0.85 }
+      [{ role: "user", content: firstReadingPrompt(chart, persona) }]
     );
 
     res.json({
@@ -136,7 +140,7 @@ app.post("/api/naming", async (req, res) => {
   try {
     const { persona } = req.body;
     if (MOCK) return res.json({ text: "那你想叫我什么？随便点也行，反正是你叫。" });
-    const text = await chat([{ role: "user", content: namingPrompt(persona) }], { temperature: 0.9 });
+    const text = await chat([{ role: "user", content: namingPrompt(persona) }]);
     res.json({ text: text.trim() });
   } catch (e) {
     res.status(500).json({ error: String(e.message || e) });
