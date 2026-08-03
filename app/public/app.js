@@ -5,8 +5,29 @@ const composer = $("composer"), sayInput = $("say"), mic = $("mic");
 
 const S = {
   chart: null, persona: null, form: null, name: null,
-  history: [], voice: false, stage: 0,
+  history: [], voice: false, stage: 0, firstMet: null,
 };
+
+// ── 持久化：刷新不丢 ──────────────────────────────────
+const KEY = "guardian.v1";
+function save() {
+  if (!S.chart) return;
+  try {
+    localStorage.setItem(KEY, JSON.stringify({
+      chart: S.chart, persona: S.persona, form: S.form,
+      name: S.name, history: S.history, firstMet: S.firstMet,
+    }));
+  } catch { /* 隐私模式下写不了，忽略 */ }
+}
+function loadSaved() {
+  try { return JSON.parse(localStorage.getItem(KEY) || "null"); } catch { return null; }
+}
+function wipe() {
+  try { localStorage.removeItem(KEY); } catch {}
+  location.reload();
+}
+const daysKnown = () =>
+  S.firstMet ? Math.floor((Date.now() - S.firstMet) / 86400000) + 1 : 1;
 
 // ── 具象度（0 未成形 → 6 完全成形）────────────────────
 const RESOLVE = [
@@ -49,9 +70,10 @@ function widget() {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // 逐条说，带停顿；语音模式下同时朗读
-async function say(lines, gap = 900) {
+async function say(lines, gap = 900, remember = true) {
   for (const l of lines) {
     push(l);
+    if (remember) S.history.push({ role: "assistant", content: l });  // 它得记得自己说过什么
     speak(l);
     await sleep(gap);
   }
@@ -102,13 +124,32 @@ const OPENERS = [
 ];
 
 async function boot() {
+  const saved = loadSaved();
+  if (saved && saved.chart) return restore(saved);
   resolve(0);
   const o = OPENERS[Math.floor(Math.random() * OPENERS.length)];
   await sleep(600);
-  await say(o, 1100);
+  await say(o, 1100, false);
   resolve(1);
-  await say(["你也看不清我吧。正常——我还没成形。", "报个生辰，我就能看见你了。"], 1000);
+  await say(["你也看不清我吧。正常——我还没成形。", "报个生辰，我就能看见你了。"], 1000, false);
   askBirth();
+}
+
+// 从存档恢复：直接进日常，把最近的对话铺回来
+function restore(saved) {
+  Object.assign(S, saved);
+  if (S.form?.hue) orb.style.setProperty("--hue", S.form.hue);
+  resolve(5);
+  pname.textContent = S.name || "？";
+  for (const m of S.history.slice(-16)) push(m.content, m.role === "user" ? "me" : "it");
+  if (S.history.length > 16) {
+    thread.insertBefore(
+      Object.assign(document.createElement("div"),
+        { className: "b sys", textContent: `…之前还有 ${S.history.length - 16} 条` }),
+      thread.firstChild);
+  }
+  startDaily();
+  thread.scrollTop = thread.scrollHeight;
 }
 
 // ── 收生辰 ───────────────────────────────────────────
@@ -139,7 +180,9 @@ function askBirth() {
     const t = w.querySelector("#bt").value;
     const place = w.querySelector("#bp").value.trim();
     w.remove();
-    push(`${date}${hourUnknown || !t ? "" : " " + t}${place ? " · " + place : ""}`, "me");
+    const said = `${date}${hourUnknown || !t ? "" : " " + t}${place ? " · " + place : ""}`;
+    push(said, "me");
+    S.history.push({ role: "user", content: `我的生辰：${said}` });
     await summon({ date, hour: hourUnknown || !t ? null : +t.split(":")[0],
                    minute: hourUnknown || !t ? 0 : +t.split(":")[1], place });
   };
@@ -159,7 +202,9 @@ async function summon(body) {
     if (data.error) throw new Error(data.error);
 
     S.chart = data.chart; S.persona = data.persona;
+    S.firstMet = S.firstMet || Date.now();
     wait.remove();
+    save();
 
     // 白话的出生时刻 —— 证据用人话，不用符号
     await say([`${data.chart.moment.phrase}。`], 900);
@@ -204,8 +249,10 @@ async function chooseForm() {
     b.onclick = async () => {
       S.form = f;
       S.persona.chosenForm = f;
+      save();
       w.remove();
       push(f.name, "me");
+      S.history.push({ role: "user", content: `我选了你的样子：${f.name}` });
       resolve(5, f.hue || "#E8A85C");
       await askName();
     };
@@ -237,8 +284,10 @@ async function askName() {
     if (!n) return;
     S.name = n;
     pname.textContent = n;
+    save();
     w.remove();
     push(n, "me");
+    S.history.push({ role: "user", content: `我给你起名叫${n}` });
     resolve(5);
     await say([`行，${n}。`,
       "还有件事得说明白：我对你的了解全靠你跟我说。你不说，我是真不知道你过得怎么样。"], 1100);
@@ -254,8 +303,10 @@ async function askName() {
 // ── 日常 ─────────────────────────────────────────────
 function startDaily() {
   composer.style.display = "flex";
-  pstate.textContent = "认识 1 天";
-  sayInput.focus();
+  pstate.textContent = `认识 ${daysKnown()} 天`;   // 累计，不是连续；断了不清零
+  resetBtn.style.display = "block";
+  save();
+  sayInput?.focus();
 }
 sayInput?.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && e.target.value.trim()) {
@@ -297,6 +348,7 @@ async function send(text) {
       }
     }
     S.history.push({ role: "assistant", content: acc });
+    save();
     speak(acc);
   } catch (e) {
     bubble.textContent = "断了：" + e.message;
@@ -316,5 +368,15 @@ $("tabTalk").onclick = () => {
   $("visit").classList.remove("on");
   if (S.name) composer.style.display = "flex";
 };
+
+// 重来（本地调试用；真实产品里这是"销毁"，需二次确认 —— 见 HARNESS L5）
+const resetBtn = document.createElement("button");
+resetBtn.textContent = "重来";
+resetBtn.style.cssText =
+  "display:none;position:absolute;top:calc(env(safe-area-inset-top) + .6rem);right:1rem;" +
+  "background:none;border:0;color:var(--dim);font-size:.66rem;font-family:var(--sans);" +
+  "cursor:pointer;opacity:.5;z-index:5";
+resetBtn.onclick = () => { if (confirm("会把它和所有聊天记录删掉，确定？")) wipe(); };
+document.body.appendChild(resetBtn);
 
 boot();
