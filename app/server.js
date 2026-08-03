@@ -265,16 +265,22 @@ app.get("/api/admin/harness", (req, res) => {
   ]);
 });
 
-// Skills：目前一个都没有，如实说
+// Skills：只有排盘一个真的存在，其余如实标注（完整目录见 design/SKILLS.md）
 app.get("/api/admin/skills", (req, res) => {
   res.json({
-    installed: [],
-    note: "还没有 skill 系统。守护神现在只能说话，不能做任何事——不能上网、不能看日历、不能记日记。",
+    installed: [
+      { name: "bazi.chart 八字排盘", note: "lib/bazi.js，召唤时算一次" },
+    ],
+    note: "命理技能目录见 design/SKILLS.md：八字是脊柱、星盘是词汇层、紫微是问题层（后置）。排盘归代码，解读归 prompt，模型永远不许自己算盘。",
     candidates: [
-      { name: "日记", why: "「它今天在干嘛」现在是假的，需要真实日记才成立" },
-      { name: "联网", why: "拾趣、查节气、追它好奇的问题" },
+      { name: "bazi.luck 大运流年", why: "「我今年怎么样」——MVP-1" },
+      { name: "bazi.day 流日黄历", why: "主动消息的内容源——MVP-1" },
+      { name: "astro.natal 日月上升", why: "小红书用户的母语是星盘不是八字——MVP-1" },
+      { name: "astro.transit 行运", why: "水逆和土星回归，29 岁用户的杀手锏——MVP-1" },
       { name: "记忆提炼", why: "把原始对话蒸馏成「关于他的事实」，现在完全没有" },
       { name: "主动消息", why: "心跳 + 调度，是「活着」的前提" },
+      { name: "合盘×2（八字+星盘）", why: "引荐素材——MVP-2" },
+      { name: "紫微全系", why: "问事定宫最能打，但缺时辰整系不可用，后置" },
     ],
   });
 });
