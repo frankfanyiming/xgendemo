@@ -193,12 +193,17 @@ async function summon(body) {
   resolve(2);
   pstate.textContent = "……";
   const wait = push("……等我一下。");
+  // 两次模型调用，可能几十秒。给点动静，别让人以为死了
+  const ticks = ["……等我一下。", "……在看你的盘。", "……还在看。", "……快了。"];
+  let ti = 0;
+  const tick = setInterval(() => { wait.textContent = ticks[++ti % ticks.length]; }, 6000);
   try {
     const r = await fetch("/api/summon", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     const data = await r.json();
+    clearInterval(tick);
     if (data.error) throw new Error(data.error);
 
     S.chart = data.chart; S.persona = data.persona;
@@ -232,8 +237,10 @@ async function summon(body) {
     await sleep(400);
     chooseForm();
   } catch (e) {
+    clearInterval(tick);
     wait.remove();
     push("出错了：" + e.message, "sys");
+    push("终端里会有更详细的报错。", "sys");
   }
 }
 

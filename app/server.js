@@ -51,27 +51,45 @@ const MOCK_READING = [
 const TEMP = process.env.TEMPERATURE ? Number(process.env.TEMPERATURE) : null;
 const temp = () => (TEMP === null ? {} : { temperature: TEMP });
 
-async function chat(messages, { json = false } = {}) {
-  const res = await fetch(`${BASE_URL}/chat/completions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${API_KEY}` },
-    body: JSON.stringify({
-      model: MODEL, messages, ...temp(),
-      ...(json ? { response_format: { type: "json_object" } } : {}),
-    }),
-  });
-  if (!res.ok) throw new Error(`模型请求失败 ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  const data = await res.json();
-  return data.choices[0].message.content;
+const TIMEOUT = Number(process.env.TIMEOUT_MS || 120000);
+
+async function chat(messages, { json = false, label = "chat" } = {}) {
+  const t0 = Date.now();
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), TIMEOUT);
+  console.log(`  → ${label} …`);
+  try {
+    const res = await fetch(`${BASE_URL}/chat/completions`, {
+      method: "POST",
+      signal: ac.signal,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${API_KEY}` },
+      body: JSON.stringify({
+        model: MODEL, messages, ...temp(),
+        ...(json ? { response_format: { type: "json_object" } } : {}),
+      }),
+    });
+    if (!res.ok) throw new Error(`模型请求失败 ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    const data = await res.json();
+    console.log(`  ← ${label} 完成，用时 ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+    return data.choices[0].message.content;
+  } catch (e) {
+    if (e.name === "AbortError") throw new Error(`${label} 超时（${TIMEOUT / 1000}s）。模型太慢或网络不通。`);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // 流式，供日常对话用
 async function chatStream(messages, onDelta) {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), TIMEOUT);
   const res = await fetch(`${BASE_URL}/chat/completions`, {
     method: "POST",
+    signal: ac.signal,
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${API_KEY}` },
     body: JSON.stringify({ model: MODEL, messages, ...temp(), stream: true }),
-  });
+  }).finally(() => clearTimeout(timer));
   if (!res.ok) throw new Error(`模型请求失败 ${res.status}: ${(await res.text()).slice(0, 300)}`);
 
   const reader = res.body.getReader();
@@ -114,14 +132,24 @@ app.post("/api/summon", async (req, res) => {
       return res.json({ chart, persona: MOCK_PERSONA, reading: MOCK_READING });
     }
 
+    console.log(`召唤 ${date} ${chart.dayMaster}`);
     const raw = await chat(
       [{ role: "user", content: personaPrompt(chart) }],
-      { json: true }
+      { json: true, label: "生成人格" }
     );
-    const persona = JSON.parse(raw);
+    let persona;
+    try {
+      persona = JSON.parse(raw);
+    } catch {
+      // 有些模型会在 JSON 外面裹一层 ```json，剥掉再试
+      const m = raw.match(/\{[\s\S]*\}/);
+      if (!m) throw new Error("人格生成返回的不是 JSON：" + raw.slice(0, 200));
+      persona = JSON.parse(m[0]);
+    }
 
     const reading = await chat(
-      [{ role: "user", content: firstReadingPrompt(chart, persona) }]
+      [{ role: "user", content: firstReadingPrompt(chart, persona) }],
+      { label: "写首读" }
     );
 
     res.json({
