@@ -116,6 +116,13 @@ mic.onclick = () => {
   recog.start();
 };
 
+// 成形后的第一个问题：具体、只有他能答、不客套
+const FIRST_Q = [
+  "刚才那段里，哪句最不对？",
+  "哪句说岔了？直说。",
+  "有说中的吗，还是全都不沾边。",
+];
+
 // ── 开场（招式：看不见你）────────────────────────────
 const OPENERS = [
   ["有人来了。", "我还看不见你。"],
@@ -296,9 +303,9 @@ async function askName() {
     push(n, "me");
     S.history.push({ role: "user", content: `我给你起名叫${n}` });
     resolve(5);
-    await say([`行，${n}。`,
-      "还有件事得说明白：我对你的了解全靠你跟我说。你不说，我是真不知道你过得怎么样。"], 1100);
-    await say(["刚才那段里，哪句最不对？"], 500);
+    // 不宣告"我的了解全靠你说"——那是行为，不是台词。只留一个具体的问题。
+    await say([`行，${n}。`], 700);
+    await say([FIRST_Q[Math.floor(Math.random() * FIRST_Q.length)]], 500);
     resolve(5);
     startDaily();
   };
