@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>守护者</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='18' r='9' fill='%23E8A85C'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --night:#0C1017; --night-2:#141A23;
+    --lamp:#E8A85C; --lamp-dim:#B37E3E; --glow:rgba(232,168,92,.15);
+    --paper:#E8E4DC; --dim:#98A0AD; --hair:rgba(232,228,220,.10);
+    --serif:"Songti SC","Source Han Serif SC","Noto Serif CJK SC",Georgia,serif;
+    --sans:"PingFang SC","Hiragino Sans GB",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{margin:0;background:var(--night);color:var(--paper);font-family:var(--sans);
+       font-size:15px;line-height:1.7;-webkit-font-smoothing:antialiased;
+       display:flex;flex-direction:column;overflow:hidden}
+
+  /* ── 存在感：随理解程度具象 ── */
+  .presence{flex:none;padding:calc(env(safe-area-inset-top) + 1rem) 0 .6rem;
+            display:flex;flex-direction:column;align-items:center;gap:.25rem}
+  .orb{position:relative;width:5.2rem;height:5.2rem;display:grid;place-items:center}
+  .halo{position:absolute;inset:0;border-radius:50%;
+        background:radial-gradient(circle at 50% 55%,var(--hue,#E8A85C) 0%,rgba(232,168,92,.3) 40%,transparent 70%);
+        opacity:var(--o,.22);filter:blur(var(--b,18px));transform:scale(var(--s,1.35));
+        transition:opacity 1s ease,filter 1.2s ease,transform 1.2s ease}
+  .core{position:relative;width:1.1rem;height:2.8rem;border-radius:50% 50% 46% 46%;
+        background:linear-gradient(to top,#FFF3DF,var(--hue,#E8A85C) 55%,transparent);
+        opacity:var(--fo,0);filter:blur(var(--fb,12px));
+        transition:opacity 1.1s ease,filter 1.2s ease}
+  @media(prefers-reduced-motion:no-preference){
+    .core{animation:sway 4.2s ease-in-out infinite}
+    @keyframes sway{0%,100%{transform:scaleY(1) skewX(0)}35%{transform:scaleY(1.07) skewX(-2.5deg)}70%{transform:scaleY(.96) skewX(2deg)}}
+  }
+  .pname{font-family:var(--serif);font-size:.92rem;opacity:var(--no,.3);transition:opacity .8s}
+  .pstate{font-size:.66rem;color:var(--dim);min-height:1rem}
+
+  /* ── 对话 ── */
+  .thread{flex:1;overflow-y:auto;padding:.5rem 1.15rem 1rem;
+          display:flex;flex-direction:column;gap:.55rem;-webkit-overflow-scrolling:touch}
+  .b{max-width:84%;font-size:.9rem;line-height:1.75;white-space:pre-wrap;word-break:break-word;
+     animation:rise .35s ease both}
+  @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  @media(prefers-reduced-motion:reduce){.b{animation:none}}
+  .b.it{align-self:flex-start;font-family:var(--serif);font-size:.95rem;
+        background:rgba(255,255,255,.045);padding:.5rem .75rem;border-radius:.6rem .6rem .6rem .18rem}
+  .b.me{align-self:flex-end;background:var(--glow);padding:.48rem .72rem;
+        border-radius:.6rem .6rem .18rem .6rem}
+  .b.sys{align-self:center;font-size:.7rem;color:var(--dim);background:none;padding:0}
+
+  /* 对话内的控件 */
+  .widget{align-self:flex-start;width:100%;max-width:100%;
+          display:flex;flex-direction:column;gap:.4rem;margin:.15rem 0}
+  .row{display:flex;gap:.4rem;flex-wrap:wrap}
+  input[type=date],input[type=time],input[type=text]{
+    background:rgba(255,255,255,.05);border:1px solid var(--hair);color:var(--paper);
+    font-family:var(--sans);font-size:.88rem;padding:.5rem .7rem;border-radius:.5rem;
+    flex:1;min-width:0}
+  input:focus{outline:1px solid var(--lamp-dim);outline-offset:0}
+  .btn{background:var(--lamp);color:#1A1206;border:0;font-family:var(--sans);
+       font-size:.86rem;font-weight:600;padding:.55rem 1rem;border-radius:.5rem;cursor:pointer}
+  .btn.ghost{background:transparent;color:var(--dim);border:1px solid var(--hair);font-weight:400}
+  .btn:active{transform:scale(.98)}
+  .fo{display:flex;align-items:center;gap:.7rem;border:1px solid var(--hair);border-radius:.55rem;
+      padding:.6rem .75rem;background:rgba(255,255,255,.025);cursor:pointer;width:100%;text-align:left}
+  .fo.sel{border-color:var(--lamp);background:var(--glow)}
+  .fo .g{width:1.7rem;height:1.7rem;flex:none;border-radius:50%}
+  .fo .nm{font-family:var(--serif);font-size:.9rem;color:var(--paper)}
+  .fo .ds{font-size:.68rem;color:var(--dim);margin-top:.05rem}
+  .peek{align-self:flex-start;font-size:.68rem;color:var(--dim);cursor:pointer;
+        border-bottom:1px dashed rgba(152,160,173,.35);padding-bottom:.05rem}
+  .chart{align-self:flex-start;width:100%;border:1px solid var(--hair);border-radius:.55rem;
+         padding:.6rem .7rem;font-size:.72rem;color:var(--dim);display:none}
+  .chart.on{display:block}
+  .chart b{color:var(--paper);font-family:var(--serif)}
+
+  /* ── 底部 ── */
+  .composer{flex:none;display:flex;align-items:center;gap:.5rem;
+            padding:.5rem 1.15rem calc(env(safe-area-inset-bottom) + .5rem)}
+  .composer input{flex:1}
+  .mic{width:2.4rem;height:2.4rem;flex:none;border-radius:50%;border:1px solid var(--hair);
+       background:transparent;color:var(--dim);font-size:1rem;cursor:pointer;display:grid;place-items:center}
+  .mic.on{border-color:var(--lamp);color:var(--lamp);background:var(--glow)}
+  .mic.rec{border-color:#C4685E;color:#C4685E;animation:pulse 1.2s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.45}}
+
+  .tabbar{flex:none;display:flex;border-top:1px solid var(--hair);background:var(--night-2)}
+  .tab{flex:1;padding:.5rem 0 calc(env(safe-area-inset-bottom) + .5rem);text-align:center;
+       cursor:pointer;font-size:.66rem;color:var(--dim);background:none;border:0;font-family:var(--sans)}
+  .tab .ic{display:block;font-size:1rem;margin-bottom:.05rem;opacity:.75}
+  .tab.on{color:var(--lamp)} .tab.on .ic{opacity:1}
+  .tab.lock{opacity:.4}
+
+  .visit{flex:1;display:none;flex-direction:column;align-items:center;justify-content:center;
+         padding:2rem 2rem;text-align:center;gap:.5rem}
+  .visit.on{display:flex}
+  .visit .t{font-family:var(--serif);font-size:1.05rem}
+  .visit .d{font-size:.8rem;color:var(--dim);max-width:17rem;line-height:1.8}
+  .lockg{width:2.8rem;height:2.8rem;border-radius:50%;border:1px solid var(--hair);
+         display:grid;place-items:center;color:var(--dim);margin-bottom:.4rem}
+
+  .err{color:#C4685E;font-size:.75rem;align-self:center;text-align:center}
+</style>
+</head>
+<body>
+
+<div class="presence" id="presence">
+  <div class="orb" id="orb"><div class="halo"></div><div class="core"></div></div>
+  <div class="pname" id="pname">？</div>
+  <div class="pstate" id="pstate">还没成形</div>
+</div>
+
+<div class="thread" id="thread"></div>
+
+<div class="visit" id="visit">
+  <div class="lockg">◌</div>
+  <p class="t">串门还没开</p>
+  <p class="d">等我更懂你一点，我才知道该带你去见谁。<br>急不来——见错人比不见人更糟。</p>
+</div>
+
+<div class="composer" id="composer" style="display:none">
+  <input type="text" id="say" placeholder="说点什么…" autocomplete="off">
+  <button class="mic" id="mic" title="语音">◉</button>
+</div>
+
+<div class="tabbar">
+  <button class="tab on" id="tabTalk"><span class="ic">◉</span>对话</button>
+  <button class="tab lock" id="tabVisit"><span class="ic">◌</span>串门</button>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
