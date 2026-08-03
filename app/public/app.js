@@ -383,14 +383,23 @@ $("tabTalk").onclick = () => {
   if (S.name) composer.style.display = "flex";
 };
 
-// 重来（本地调试用；真实产品里这是"销毁"，需二次确认 —— 见 HARNESS L5）
-const resetBtn = document.createElement("button");
-resetBtn.textContent = "重来";
-resetBtn.style.cssText =
-  "display:none;position:absolute;top:calc(env(safe-area-inset-top) + .6rem);right:1rem;" +
-  "background:none;border:0;color:var(--dim);font-size:.66rem;font-family:var(--sans);" +
-  "cursor:pointer;opacity:.5;z-index:5";
-resetBtn.onclick = () => { if (confirm("会把它和所有聊天记录删掉，确定？")) wipe(); };
-document.body.appendChild(resetBtn);
+// 右上角：后台 / 重来
+// （真实产品里"重来"是销毁，需二次确认 —— 见 HARNESS L5）
+const corner = document.createElement("div");
+corner.style.cssText =
+  "position:absolute;top:calc(env(safe-area-inset-top) + .6rem);right:1rem;z-index:5;" +
+  "display:flex;gap:.7rem;font-size:.66rem;font-family:var(--sans);opacity:.5";
+const mkBtn = (text, fn) => {
+  const b = document.createElement("button");
+  b.textContent = text;
+  b.style.cssText = "background:none;border:0;color:var(--dim);font:inherit;cursor:pointer;padding:0";
+  b.onclick = fn;
+  corner.appendChild(b);
+  return b;
+};
+mkBtn("后台", () => (location.href = "/admin.html"));
+const resetBtn = mkBtn("重来", () => { if (confirm("会把它和所有聊天记录删掉，确定？")) wipe(); });
+resetBtn.style.display = "none";
+document.body.appendChild(corner);
 
 boot();

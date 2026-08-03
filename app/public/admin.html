@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>后台 · 守护者</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='5' y='5' width='22' height='22' rx='4' fill='none' stroke='%23E8A85C' stroke-width='2.5'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --night:#0C1017; --night-2:#141A23; --card:#121821;
+    --lamp:#E8A85C; --lamp-dim:#B37E3E; --glow:rgba(232,168,92,.12);
+    --paper:#E8E4DC; --dim:#98A0AD; --dim-2:#6B7482;
+    --hair:rgba(232,228,220,.10);
+    --ok:#7FB069; --warn:#E0B24C; --no:#C4685E;
+    --serif:"Songti SC","Source Han Serif SC","Noto Serif CJK SC",Georgia,serif;
+    --sans:"PingFang SC","Hiragino Sans GB",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--night);color:var(--paper);font-family:var(--sans);
+       font-size:14px;line-height:1.7;-webkit-font-smoothing:antialiased}
+  a{color:var(--lamp);text-decoration:none}
+
+  /* ── 顶栏 ── */
+  .top{position:sticky;top:0;z-index:10;background:rgba(12,16,23,.92);
+       backdrop-filter:blur(12px);border-bottom:1px solid var(--hair);
+       display:flex;align-items:center;gap:.8rem;padding:.7rem 1.2rem;flex-wrap:wrap}
+  .top h1{font-family:var(--serif);font-size:1rem;font-weight:400;margin:0;letter-spacing:.04em}
+  .top .sp{flex:1}
+  .pill{font-size:.68rem;color:var(--dim);border:1px solid var(--hair);
+        border-radius:1rem;padding:.12rem .55rem;white-space:nowrap}
+  .pill b{color:var(--paper);font-weight:500}
+  .pill.hot{border-color:var(--lamp-dim);color:var(--lamp)}
+
+  .wrap{display:flex;align-items:flex-start;max-width:1180px;margin:0 auto}
+  nav{position:sticky;top:3.2rem;flex:none;width:9.5rem;padding:1.2rem .6rem 3rem;
+      display:flex;flex-direction:column;gap:.1rem}
+  nav a{display:block;font-size:.76rem;color:var(--dim);padding:.3rem .55rem;border-radius:.35rem}
+  nav a:hover{color:var(--paper);background:rgba(255,255,255,.04)}
+  nav .cnt{float:right;font-size:.66rem;color:var(--dim-2);font-family:var(--mono)}
+  main{flex:1;min-width:0;padding:1.2rem 1.2rem 6rem}
+
+  section{margin-bottom:2.2rem;scroll-margin-top:3.6rem}
+  h2{font-family:var(--serif);font-size:.95rem;font-weight:400;margin:0 0 .2rem;
+     display:flex;align-items:baseline;gap:.6rem}
+  h2 .n{font-family:var(--mono);font-size:.68rem;color:var(--dim-2)}
+  .sub{font-size:.74rem;color:var(--dim);margin:0 0 .7rem;line-height:1.75}
+
+  .card{background:var(--card);border:1px solid var(--hair);border-radius:.55rem;padding:.85rem 1rem}
+  .card + .card{margin-top:.5rem}
+
+  /* 键值 */
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:.25rem 1rem;font-size:.8rem}
+  .kv dt{color:var(--dim);white-space:nowrap}
+  .kv dd{margin:0;font-family:var(--mono);font-size:.76rem;word-break:break-all}
+
+  /* 代码块 */
+  pre{margin:0;font-family:var(--mono);font-size:.73rem;line-height:1.65;
+      white-space:pre-wrap;word-break:break-word;max-height:26rem;overflow:auto;
+      color:#CFD6DF}
+  pre.tall{max-height:40rem}
+  textarea{width:100%;min-height:22rem;background:#0E141C;color:#CFD6DF;
+           border:1px solid var(--hair);border-radius:.45rem;padding:.7rem .8rem;
+           font-family:var(--mono);font-size:.73rem;line-height:1.7;resize:vertical}
+  textarea:focus{outline:1px solid var(--lamp-dim)}
+
+  .bar{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;margin-top:.55rem}
+  .btn{background:var(--lamp);color:#1A1206;border:0;font-family:var(--sans);
+       font-size:.78rem;font-weight:600;padding:.42rem .9rem;border-radius:.4rem;cursor:pointer}
+  .btn.ghost{background:transparent;color:var(--dim);border:1px solid var(--hair);font-weight:400}
+  .btn.ghost:hover{color:var(--paper);border-color:var(--dim-2)}
+  .btn:active{transform:scale(.98)}
+  .hint{font-size:.7rem;color:var(--dim-2)}
+  .hint.ok{color:var(--ok)} .hint.bad{color:var(--no)}
+
+  /* 状态表 */
+  table{width:100%;border-collapse:collapse;font-size:.78rem}
+  td{padding:.4rem .5rem;border-bottom:1px solid var(--hair);vertical-align:top}
+  tr:last-child td{border-bottom:0}
+  td.s{width:1.6rem;text-align:center;font-size:.85rem;font-weight:700}
+  td.id{white-space:nowrap;color:var(--paper)}
+  td.nt{color:var(--dim);font-size:.74rem}
+  .s.y{color:var(--ok)} .s.p{color:var(--warn)} .s.n{color:var(--no)}
+  .tally{display:flex;gap:.45rem;margin-bottom:.6rem;flex-wrap:wrap}
+
+  /* 记忆 */
+  .msg{display:flex;gap:.55rem;padding:.28rem 0;font-size:.78rem;line-height:1.65;
+       border-bottom:1px solid rgba(232,228,220,.05)}
+  .msg .i{flex:none;width:1.6rem;font-family:var(--mono);font-size:.66rem;color:var(--dim-2);text-align:right}
+  .msg .r{flex:none;width:1.9rem;font-size:.68rem;color:var(--dim-2)}
+  .msg.u .t{color:var(--lamp)}
+  .msg .t{white-space:pre-wrap;word-break:break-word;min-width:0}
+  .cut{display:flex;align-items:center;gap:.6rem;margin:.5rem 0;font-size:.68rem;color:var(--no)}
+  .cut::before,.cut::after{content:"";flex:1;height:1px;background:rgba(196,104,94,.3)}
+  .scroll{max-height:30rem;overflow:auto}
+
+  .empty{color:var(--dim);font-size:.8rem;padding:1.4rem 0;text-align:center}
+  .hole{border-left:2px solid var(--no);padding-left:.7rem;color:var(--dim);
+        font-size:.76rem;line-height:1.75;margin:.5rem 0}
+  .chip{display:inline-block;font-size:.7rem;color:var(--dim);border:1px solid var(--hair);
+        border-radius:.3rem;padding:.1rem .45rem;margin:.12rem .25rem .12rem 0}
+
+  @media(max-width:720px){
+    .wrap{display:block}
+    nav{position:static;width:auto;flex-direction:row;flex-wrap:wrap;padding:.5rem .9rem;
+        border-bottom:1px solid var(--hair)}
+    nav .cnt{display:none}
+    main{padding:1rem .9rem 5rem}
+  }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>后台</h1>
+  <span class="pill" id="pModel">…</span>
+  <span class="pill" id="pWho">…</span>
+  <span class="pill" id="pSoul">…</span>
+  <span class="sp"></span>
+  <a href="/" class="pill">← 回对话</a>
+</div>
+
+<div class="wrap">
+  <nav>
+    <a href="#overview">概览</a>
+    <a href="#soul">Soul<span class="cnt" id="cSoul"></span></a>
+    <a href="#prompt">真实 prompt<span class="cnt" id="cPrompt"></span></a>
+    <a href="#memory">记忆<span class="cnt" id="cMem"></span></a>
+    <a href="#chart">命盘</a>
+    <a href="#persona">人格档案</a>
+    <a href="#harness">硬约束<span class="cnt" id="cHarness"></span></a>
+    <a href="#skills">Skills<span class="cnt" id="cSkill"></span></a>
+    <a href="#data">数据</a>
+  </nav>
+
+  <main>
+
+  <section id="overview">
+    <h2>概览</h2>
+    <p class="sub">这一页只说真话：写在文档里的东西，代码里没做的一律标红。</p>
+    <div class="card"><dl class="kv" id="kvOverview"></dl></div>
+  </section>
+
+  <section id="soul">
+    <h2>Soul <span class="n">出场设置 · 常量</span></h2>
+    <p class="sub">每只守护神出厂都带这一份，一字不差。<b>在这里改，下一句话就生效，不用重启</b>；重启服务会回到文件里的版本。</p>
+    <div class="card">
+      <textarea id="soulBox" spellcheck="false"></textarea>
+      <div class="bar">
+        <button class="btn" id="soulSave">保存并生效</button>
+        <button class="btn ghost" id="soulReset">恢复文件版本</button>
+        <span class="hint" id="soulHint"></span>
+      </div>
+    </div>
+  </section>
+
+  <section id="prompt">
+    <h2>真实 prompt <span class="n">你从来没见过的那一段</span></h2>
+    <p class="sub">Soul 只是其中一块。这里是<b>拼装完、这一刻真正发给模型的完整 system prompt</b>——
+      对话质感不对，八成是这段的问题。</p>
+    <div class="card">
+      <div class="bar" style="margin:0 0 .55rem">
+        <button class="btn ghost" id="pvRefresh">重新拼装</button>
+        <label class="hint"><input type="checkbox" id="pvVoice"> 语音模式</label>
+        <button class="btn ghost" id="pvCopy">复制</button>
+        <span class="hint" id="pvHint"></span>
+      </div>
+      <pre class="tall" id="pvBox">…</pre>
+    </div>
+  </section>
+
+  <section id="memory">
+    <h2>记忆</h2>
+    <p class="sub">现在的"记忆"就是一个原始对话数组，存在你自己浏览器的 localStorage 里。</p>
+    <div class="hole" id="memHole">
+      没有提炼、没有摘要、没有"关于他的事实"。超过窗口的部分<b>直接消失</b>，不是被遗忘，是从来没被记住过。
+      这是目前最大的一个洞。
+    </div>
+    <div class="card"><div class="scroll" id="memBox"></div></div>
+  </section>
+
+  <section id="chart">
+    <h2>命盘 <span class="n">召唤时算一次，之后不变</span></h2>
+    <div class="card"><dl class="kv" id="kvChart"></dl></div>
+    <div class="card"><pre id="chartRaw"></pre></div>
+  </section>
+
+  <section id="persona">
+    <h2>人格档案 <span class="n">命盘 → 模型生成一次</span></h2>
+    <p class="sub">性格底色从<b>喜用神</b>推（守护神是他命里缺的那味药），共有的毛病从<b>同一张盘</b>推。
+      生成后就写死了——目前<b>不随对话演化</b>。</p>
+    <div class="card"><pre id="personaRaw"></pre></div>
+  </section>
+
+  <section id="harness">
+    <h2>硬约束 <span class="n">HARNESS L0–L5</span></h2>
+    <p class="sub">左边是文档里写的，右边是代码里真的做了没有。</p>
+    <div class="tally" id="tally"></div>
+    <div class="card"><table id="harnessTable"></table></div>
+  </section>
+
+  <section id="skills">
+    <h2>Skills</h2>
+    <div class="card" id="skillBox"></div>
+  </section>
+
+  <section id="data">
+    <h2>数据 <span class="n">HARNESS L4/L5</span></h2>
+    <p class="sub">"随时能看我知道你什么，也随时能全删"——这句话得能兑现。</p>
+    <div class="card">
+      <div class="bar" style="margin:0">
+        <button class="btn ghost" id="dlBtn">导出全部（JSON）</button>
+        <button class="btn ghost" id="wipeBtn" style="color:var(--no);border-color:rgba(196,104,94,.35)">销毁</button>
+        <span class="hint">销毁 = 把它和所有聊天记录删掉，不可恢复。</span>
+      </div>
+    </div>
+  </section>
+
+  </main>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const KEY = "guardian.v1";
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const S = (() => { try { return JSON.parse(localStorage.getItem(KEY) || "null"); } catch { return null; } })();
+const HAS = !!(S && S.chart);
+let meta = {};
+
+// ── 概览 ──────────────────────────────────────────────
+async function overview() {
+  meta = await (await fetch("/api/admin/soul")).json();
+  $("pModel").innerHTML = meta.mock ? "<b>MOCK</b> 没调模型" : "模型 <b>" + esc(meta.model) + "</b>";
+  $("pWho").innerHTML = HAS ? "守护神 <b>" + esc(S.name || "（还没起名）") + "</b>" : "还没召唤";
+
+  const days = HAS && S.firstMet ? Math.floor((Date.now() - S.firstMet) / 86400000) + 1 : 0;
+  const hist = (S && S.history) || [];
+  const rows = [
+    ["模型", meta.mock ? "MOCK（不调模型）" : meta.model],
+    ["接口", meta.baseUrl],
+    ["temperature", meta.temperature === null ? "不发这个参数（用模型默认）" : meta.temperature],
+    ["超时", meta.timeoutMs / 1000 + "s"],
+    ["守护神", HAS ? (S.name || "（还没起名）") : "—"],
+    ["样子", HAS && S.form ? S.form.name + "　" + (S.form.why || "") : "—"],
+    ["认识", HAS ? days + " 天（累计，断了不清零）" : "—"],
+    ["对话", hist.length + " 条（其中带进上下文的：最近 24 条）"],
+    ["记忆存在哪", "你这台机器的浏览器 localStorage，服务端一个字都没存"],
+  ];
+  $("kvOverview").innerHTML = rows
+    .map(([k, v]) => "<dt>" + esc(k) + "</dt><dd>" + esc(v) + "</dd>").join("");
+}
+
+// ── Soul ─────────────────────────────────────────────
+function soulPills() {
+  $("pSoul").className = "pill" + (meta.isOverridden ? " hot" : "");
+  $("pSoul").textContent = meta.isOverridden ? "Soul 已被后台改过" : "Soul = 文件版本";
+  $("cSoul").textContent = $("soulBox").value.length;
+}
+async function soulInit() {
+  $("soulBox").value = meta.soul || "";
+  soulPills();
+  $("soulBox").addEventListener("input", () => { $("cSoul").textContent = $("soulBox").value.length; });
+
+  $("soulSave").onclick = async () => {
+    const r = await (await fetch("/api/admin/soul", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ soul: $("soulBox").value }),
+    })).json();
+    meta.isOverridden = r.isOverridden;
+    soulPills();
+    hint("soulHint", "已生效——回对话页直接发一句就能看出来", "ok");
+    preview();
+  };
+  $("soulReset").onclick = async () => {
+    await fetch("/api/admin/soul", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reset: true }),
+    });
+    meta = await (await fetch("/api/admin/soul")).json();
+    $("soulBox").value = meta.soul;
+    soulPills();
+    hint("soulHint", "已恢复成 lib/prompts.js 里的版本");
+    preview();
+  };
+}
+function hint(id, text, cls) {
+  const e = $(id);
+  e.className = "hint" + (cls ? " " + cls : "");
+  e.textContent = text;
+  setTimeout(() => { if (e.textContent === text) e.textContent = ""; }, 4000);
+}
+
+// ── 真实 prompt ───────────────────────────────────────
+async function preview() {
+  if (!HAS) {
+    $("pvBox").textContent = "（还没召唤，没有可拼装的内容。先去对话页报个生辰。）";
+    return;
+  }
+  const r = await (await fetch("/api/admin/preview", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chart: S.chart, persona: S.persona,
+      guardianName: S.name, voice: $("pvVoice").checked,
+    }),
+  })).json();
+  $("pvBox").textContent = r.system;
+  $("cPrompt").textContent = r.system.length;
+  $("pvHint").textContent = r.system.length + " 字，每轮对话都要发一遍";
+}
+
+// ── 记忆 ─────────────────────────────────────────────
+function memory() {
+  const h = (S && S.history) || [];
+  $("cMem").textContent = h.length;
+  if (!h.length) { $("memBox").innerHTML = '<p class="empty">还没有任何对话</p>'; return; }
+  const cut = Math.max(0, h.length - 24);          // server 只带最近 24 条
+  let out = "";
+  h.forEach((m, i) => {
+    if (i === cut && cut > 0) out += '<div class="cut">以上 ' + cut + ' 条不会进上下文——它现在真的不知道</div>';
+    const u = m.role === "user";
+    out += '<div class="msg' + (u ? " u" : "") + '"><span class="i">' + (i + 1) + '</span>'
+         + '<span class="r">' + (u ? "他" : "它") + '</span>'
+         + '<span class="t">' + esc(m.content) + "</span></div>";
+  });
+  $("memBox").innerHTML = out;
+  $("memBox").scrollTop = $("memBox").scrollHeight;
+}
+
+// ── 命盘 / 人格 ───────────────────────────────────────
+function chartView() {
+  if (!HAS) {
+    $("kvChart").innerHTML = "";
+    $("chartRaw").textContent = "（还没召唤）";
+    $("personaRaw").textContent = "（还没召唤）";
+    return;
+  }
+  const c = S.chart, p = c.power;
+  const rows = [
+    ["四柱", [c.pillars.year, c.pillars.month, c.pillars.day, c.pillars.hour || "（时辰不详）"].join(" ")],
+    ["日主", c.dayMaster + "　← 他这个人"],
+    ["月令", c.monthZhi + c.monthElement + "　← 他所处的环境"],
+    ["五行", "木" + p.木 + "　火" + p.火 + "　土" + p.土 + "　金" + p.金 + "　水" + p.水],
+    ["身强弱", (c.strength.strong ? "偏强" : "偏弱") + "（帮 " + c.strength.support + " / 耗 " + c.strength.drain + "）"],
+    ["喜用", c.favorable.join("、") + "　← 决定守护神的性格底色"],
+    ["生肖星座", c.zodiac + "　" + c.constellation],
+    ["出生时刻", c.moment.phrase + "　← 给用户看的就是这句，不是四柱"],
+  ];
+  $("kvChart").innerHTML = rows.map(([k, v]) => "<dt>" + esc(k) + "</dt><dd>" + esc(v) + "</dd>").join("");
+  $("chartRaw").textContent = JSON.stringify(c, null, 2);
+  $("personaRaw").textContent = JSON.stringify(S.persona, null, 2);
+}
+
+// ── 硬约束 ───────────────────────────────────────────
+async function harness() {
+  const list = await (await fetch("/api/admin/harness")).json();
+  const mark = (d) => d === true ? ["y", "✓"] : d === "partial" ? ["p", "!"] : ["n", "✕"];
+  const n = { y: 0, p: 0, n: 0 };
+  const body = list.map((x) => {
+    const [cls, ch] = mark(x.done); n[cls]++;
+    return '<tr><td class="s ' + cls + '">' + ch + "</td>"
+         + '<td class="id">' + esc(x.id) + "</td>"
+         + '<td class="nt">' + esc(x.spec) + "</td>"
+         + '<td class="nt">' + esc(x.note) + "</td></tr>";
+  }).join("");
+  $("harnessTable").innerHTML = body;
+  $("cHarness").textContent = n.y + "/" + list.length;
+  $("tally").innerHTML =
+      '<span class="pill"><b style="color:var(--ok)">' + n.y + "</b> 已实现</span>"
+    + '<span class="pill"><b style="color:var(--warn)">' + n.p + "</b> 只写在 prompt 里</span>"
+    + '<span class="pill"><b style="color:var(--no)">' + n.n + "</b> 没做</span>";
+}
+
+// ── skills ───────────────────────────────────────────
+async function skills() {
+  const s = await (await fetch("/api/admin/skills")).json();
+  $("cSkill").textContent = s.installed.length;
+  $("skillBox").innerHTML = s.installed.length
+    ? s.installed.map((x) => '<span class="chip">' + esc(x.name) + "</span>").join("")
+    : '<div class="hole">' + esc(s.note) + "</div>"
+      + '<p class="sub" style="margin:.7rem 0 .3rem">该有而没有的：</p>'
+      + s.candidates.map((c) =>
+          '<div class="msg"><span class="r" style="width:4rem;color:var(--paper)">' + esc(c.name) + "</span>"
+          + '<span class="t" style="color:var(--dim)">' + esc(c.why) + "</span></div>").join("");
+}
+
+// ── 数据 ─────────────────────────────────────────────
+$("dlBtn").onclick = () => {
+  const blob = new Blob([JSON.stringify(S, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "guardian-" + (S && S.name ? S.name : "unnamed") + ".json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+$("wipeBtn").onclick = () => {
+  if (!confirm("会把它和所有聊天记录删掉，不可恢复。确定？")) return;
+  localStorage.removeItem(KEY);
+  location.href = "/";
+};
+
+$("pvRefresh").onclick = preview;
+$("pvVoice").onchange = preview;
+$("pvCopy").onclick = async () => {
+  try { await navigator.clipboard.writeText($("pvBox").textContent); hint("pvHint", "已复制", "ok"); }
+  catch { hint("pvHint", "复制失败，手动选吧", "bad"); }
+};
+
+(async () => {
+  await overview();
+  await soulInit();
+  chartView();
+  memory();
+  await Promise.all([preview(), harness(), skills()]);
+})();
+</script>
+</body>
+</html>

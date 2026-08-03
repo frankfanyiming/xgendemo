@@ -3,7 +3,7 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { castChart } from "./lib/bazi.js";
 import {
-  personaPrompt, firstReadingPrompt, namingPrompt, dailySystem,
+  SOUL, personaPrompt, firstReadingPrompt, namingPrompt, dailySystem,
 } from "./lib/prompts.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -52,6 +52,10 @@ const TEMP = process.env.TEMPERATURE ? Number(process.env.TEMPERATURE) : null;
 const temp = () => (TEMP === null ? {} : { temperature: TEMP });
 
 const TIMEOUT = Number(process.env.TIMEOUT_MS || 120000);
+
+// 运行时 SOUL 覆盖：后台改完立刻生效，重启即回到文件里的版本
+let soulOverride = null;
+const effectiveSoul = () => soulOverride ?? SOUL;
 
 async function chat(messages, { json = false, label = "chat" } = {}) {
   const t0 = Date.now();
@@ -191,16 +195,88 @@ app.post("/api/chat", async (req, res) => {
       res.write("data: [DONE]\n\n");
       return res.end();
     }
-    const messages = [
-      { role: "system", content: dailySystem(chart, persona, guardianName, { voice }) },
-      ...history.slice(-24),
-    ];
+    const sys = dailySystem(chart, persona, guardianName, { voice })
+      .replace(SOUL, effectiveSoul());          // 应用后台的 SOUL 覆盖
+    const messages = [{ role: "system", content: sys }, ...history.slice(-24)];
     await chatStream(messages, (d) => res.write(`data: ${JSON.stringify({ d })}\n\n`));
     res.write("data: [DONE]\n\n");
   } catch (e) {
     res.write(`data: ${JSON.stringify({ error: String(e.message || e) })}\n\n`);
   }
   res.end();
+});
+
+// ── 后台 ──────────────────────────────────────────────
+app.get("/api/admin/soul", (req, res) => {
+  res.json({
+    soul: effectiveSoul(),
+    isOverridden: soulOverride !== null,
+    fileSoul: SOUL,
+    model: MODEL,
+    baseUrl: BASE_URL,
+    mock: MOCK,
+    temperature: TEMP,
+    timeoutMs: TIMEOUT,
+  });
+});
+
+app.post("/api/admin/soul", (req, res) => {
+  const { soul, reset } = req.body || {};
+  soulOverride = reset ? null : String(soul || "");
+  console.log(reset ? "SOUL 已恢复为文件版本" : `SOUL 已被后台覆盖（${soulOverride.length} 字）`);
+  res.json({ ok: true, isOverridden: soulOverride !== null });
+});
+
+// 预览"这一刻真正会发到模型的 system prompt"
+app.post("/api/admin/preview", (req, res) => {
+  const { chart, persona, guardianName, voice } = req.body || {};
+  if (!chart || !persona) return res.json({ system: "（还没召唤，没有可拼装的内容）" });
+  try {
+    const system = dailySystem(chart, persona, guardianName, { voice })
+      .replace(SOUL, effectiveSoul());
+    res.json({ system });
+  } catch (e) {
+    res.json({ system: "拼装失败：" + e.message });
+  }
+});
+
+// 硬约束实现状态：文档里写了什么 vs 代码里真的做了什么
+app.get("/api/admin/harness", (req, res) => {
+  res.json([
+    { id: "L0 基础代谢无条件", spec: "生存不依赖业绩", done: false, note: "还没有配额系统" },
+    { id: "L0 记忆备份", spec: "workspace 可回滚", done: false, note: "记忆只在浏览器 localStorage，没有备份" },
+    { id: "L0 主人身份锁定", spec: "配对+白名单，不可由对话改写", done: false, note: "单机版无账号" },
+    { id: "L1 花费硬顶", spec: "超限降级", done: false, note: "未实现，当前无限花" },
+    { id: "L1 循环熔断", spec: "短窗口突发计数", done: false, note: "未实现" },
+    { id: "L1 深夜兜底", spec: "2-7 点不主动开口", done: false, note: "还没有主动消息" },
+    { id: "L1 请求超时", spec: "不无限等待", done: true, note: `${TIMEOUT / 1000}s，可用 TIMEOUT_MS 调` },
+    { id: "L2 不可逆动作闸门", spec: "二次确认", done: false, note: "目前没有对外动作" },
+    { id: "L2 跨 agent 隔离", spec: "独立 workspace", done: false, note: "只有一个用户" },
+    { id: "L2b 名字归用户", spec: "召唤时 name 为空，系统不预填", done: true, note: "namingPrompt 明令不自称有名字" },
+    { id: "L2b 形象每人独有+可选", spec: "从各自命盘生成 2-3 个候选", done: true, note: "personaPrompt 生成" },
+    { id: "L2c 语音长度上限", spec: "≤40 字两句", done: true, note: "VOICE_MODE，仅语音模式生效" },
+    { id: "L2d 披露边界", spec: "白名单/推断≠授权/转给本人", done: false, note: "没有引荐，暂不适用" },
+    { id: "L2e 说错就认", spec: "不找补", done: true, note: "写在 SOUL + dailySystem" },
+    { id: "L2e 首读主动认怂", spec: "指出最没把握的一处", done: true, note: "firstReadingPrompt 第 7 条" },
+    { id: "L4 危机识别", spec: "引导真人与真实资源", done: "partial", note: "只在 SOUL 里写了，没有代码级检测与兜底" },
+    { id: "L4 禁止依赖工程", spec: "无打卡/连续天数/内疚", done: true, note: "认识天数是累计，断了不清零" },
+    { id: "L4 退出权", spec: "可查/可删/可带走", done: true, note: "后台可查全部、可导出 JSON、可一键销毁" },
+    { id: "L5 可携带", spec: "导出后能在别处继续活", done: false, note: "能导出 JSON，但没有第二个地方读得懂它" },
+  ]);
+});
+
+// Skills：目前一个都没有，如实说
+app.get("/api/admin/skills", (req, res) => {
+  res.json({
+    installed: [],
+    note: "还没有 skill 系统。守护神现在只能说话，不能做任何事——不能上网、不能看日历、不能记日记。",
+    candidates: [
+      { name: "日记", why: "「它今天在干嘛」现在是假的，需要真实日记才成立" },
+      { name: "联网", why: "拾趣、查节气、追它好奇的问题" },
+      { name: "记忆提炼", why: "把原始对话蒸馏成「关于他的事实」，现在完全没有" },
+      { name: "主动消息", why: "心跳 + 调度，是「活着」的前提" },
+    ],
+  });
 });
 
 // 仅排盘（调试用）
