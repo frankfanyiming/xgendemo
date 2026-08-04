@@ -270,6 +270,7 @@ app.get("/api/admin/skills", (req, res) => {
   res.json({
     installed: [
       { name: "bazi.chart 八字排盘", note: "lib/bazi.js，召唤时算一次" },
+      { name: "timetalk 时间对话（招式版）", note: "TIMETALK 块拼进 dailySystem；灵媒协议——两边的话都用户自己说，见 design/SKILLS.md §4" },
     ],
     note: "命理技能目录见 design/SKILLS.md：八字是脊柱、星盘是词汇层、紫微是问题层（后置）。排盘归代码，解读归 prompt，模型永远不许自己算盘。",
     candidates: [
